@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import questionsRouter from './routes/questions';
+import attemptsRouter from './routes/attempts';
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use('/api/questions', questionsRouter);
+app.use('/api/attempts', attemptsRouter);
 
 // Тестовый маршрут — проверяем что сервер живой
 app.get('/api/health', (req, res) => {

@@ -1,8 +1,11 @@
+// client/src/pages/Trainer.tsx
+
 import { useState } from 'react';
 import { ModeSelector } from '../components/ModeSelector';
 import { AnswerOptions } from '../components/AnswerOptions';
 import { Solution }      from '../components/Solution';
 import { fetchQuestion, buildSolution } from '../api/trainer';
+import { saveAttempt } from '../api/clinet';
 import type { Mode, Question, HistoryItem, SolutionStep } from '../types';
 
 const MODE_LABELS: Record<Mode, string> = {
@@ -43,7 +46,7 @@ export function Trainer({ onAttempt }: Props) {
     setSolution([]);
   };
 
-  const checkAnswer = () => {
+  const checkAnswer = async () => {
     if (!question || selected === null) return;
 
     const selectedOpt = question.options.find(o => o.id === selected);
@@ -62,6 +65,21 @@ export function Trainer({ onAttempt }: Props) {
       wrong:   s.wrong   + (isCorrect ? 0 : 1),
     }));
 
+    // Сохраняем в БД
+    try {
+      await saveAttempt({
+        mode: MODE_LABELS[question.mode],
+        display: question.display,
+        correct: question.correct,
+        answer: selectedOpt?.label ?? '',
+        isCorrect,
+      });
+      console.log('✅ Попытка сохранена в БД');
+    } catch (err) {
+      console.error('❌ Ошибка сохранения:', err);
+    }
+
+    // Сохраняем в локальную историю
     onAttempt({
       display:   question.display,
       correct:   question.correct,
@@ -70,10 +88,6 @@ export function Trainer({ onAttempt }: Props) {
       mode:      MODE_LABELS[question.mode],
     });
   };
-
-  const isCorrectAnswer = checked && question?.options
-    .filter(o => o.isCorrect)
-    .every(o => o.id === selected || question.options.find(x => x.id === selected)?.isCorrect);
 
   return (
     <div className="page-container">
