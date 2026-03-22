@@ -17,7 +17,6 @@ const NUMBER_SYSTEMS = [
   { dec: '15', bin: '1111', oct: '17', hex: 'F' },
 ];
 
-// Таблица умножения 16СС (0-F x 0-F)
 const HEX_DIGITS = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'];
 
 function hexMul(a: string, b: string): string {
@@ -32,7 +31,6 @@ export function Tables() {
         <p>Соответствие чисел в десятичной, двоичной, восьмеричной и шестнадцатеричной системах.</p>
       </div>
 
-      {/* Таблица 1 — Системы счисления */}
       <div className="section-card">
         <h2>Таблица 1 — Системы счисления</h2>
         <div className="ns-table-wrap">
@@ -59,7 +57,6 @@ export function Tables() {
         </div>
       </div>
 
-      {/* Таблица 2 — Умножение */}
       <div className="section-card">
         <h2>Таблица 2 — Умножение шестнадцатеричных чисел</h2>
         <p style={{ marginBottom: '16px' }}>При вычислениях удобно пользоваться таблицей умножения 16СС.</p>
@@ -76,10 +73,7 @@ export function Tables() {
                 <tr key={row}>
                   <th>{row}</th>
                   {HEX_DIGITS.map(col => (
-                    <td
-                      key={col}
-                      className={hexMul(row, col) === '0' ? 'zero-cell' : ''}
-                    >
+                    <td key={col} className={hexMul(row, col) === '0' ? 'zero-cell' : ''}>
                       {hexMul(row, col).toUpperCase()}
                     </td>
                   ))}

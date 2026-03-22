@@ -1,14 +1,11 @@
-import axios from 'axios';
-import type { Mode, Question, SolutionStep } from '../types';
-
-const api = axios.create({ baseURL: '/api' });
+import type { Mode, Question } from '../types';
+import { api } from './client';
 
 export async function fetchQuestion(mode: Mode): Promise<Question> {
   const { data } = await api.get<Question>(`/questions/generate?mode=${mode}`);
   return data;
 }
 
-// buildSolution остаётся на клиенте
 export function buildSolution(q: Question): string[] {
   const hex = q.display.split('(16)')[0].trim();
 
@@ -51,38 +48,20 @@ export function buildSolution(q: Question): string[] {
 
   if (q.mode === 'addition') {
     const [hexA, hexB] = q.display.replace(' = ?(16)', '').split(' + ');
-    const a = parseInt(hexA, 16);
-    const b = parseInt(hexB, 16);
-    return [
-      `${hexA}(16) = ${a}(10)`,
-      `${hexB}(16) = ${b}(10)`,
-      `${a} + ${b} = ${a + b}(10)`,
-      `${a + b}(10) = ${q.correct}(16)`,
-    ];
+    const a = parseInt(hexA, 16), b = parseInt(hexB, 16);
+    return [`${hexA}(16) = ${a}(10)`, `${hexB}(16) = ${b}(10)`, `${a} + ${b} = ${a+b}(10)`, `${a+b}(10) = ${q.correct}(16)`];
   }
 
   if (q.mode === 'subtraction') {
     const [hexA, hexB] = q.display.replace(' = ?(16)', '').split(' − ');
-    const a = parseInt(hexA, 16);
-    const b = parseInt(hexB, 16);
-    return [
-      `${hexA}(16) = ${a}(10)`,
-      `${hexB}(16) = ${b}(10)`,
-      `${a} − ${b} = ${a - b}(10)`,
-      `${a - b}(10) = ${q.correct}(16)`,
-    ];
+    const a = parseInt(hexA, 16), b = parseInt(hexB, 16);
+    return [`${hexA}(16) = ${a}(10)`, `${hexB}(16) = ${b}(10)`, `${a} − ${b} = ${a-b}(10)`, `${a-b}(10) = ${q.correct}(16)`];
   }
 
   if (q.mode === 'multiplication') {
     const [hexA, hexB] = q.display.replace(' = ?(16)', '').split(' × ');
-    const a = parseInt(hexA, 16);
-    const b = parseInt(hexB, 16);
-    return [
-      `${hexA}(16) = ${a}(10)`,
-      `${hexB}(16) = ${b}(10)`,
-      `${a} × ${b} = ${a * b}(10)`,
-      `${a * b}(10) = ${q.correct}(16)`,
-    ];
+    const a = parseInt(hexA, 16), b = parseInt(hexB, 16);
+    return [`${hexA}(16) = ${a}(10)`, `${hexB}(16) = ${b}(10)`, `${a} × ${b} = ${a*b}(10)`, `${a*b}(10) = ${q.correct}(16)`];
   }
 
   return [];

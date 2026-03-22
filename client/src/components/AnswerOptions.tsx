@@ -19,12 +19,8 @@ export function AnswerOptions({ options, selected, onChange, disabled }: Props) 
   return (
     <div className="options-grid">
       {options.map(opt => (
-        <button
-          key={opt.id}
-          className={getClass(opt)}
-          onClick={() => !disabled && onChange(opt.id)}
-          disabled={disabled}
-        >
+        <button key={opt.id} className={getClass(opt)}
+          onClick={() => !disabled && onChange(opt.id)} disabled={disabled}>
           {opt.label}
         </button>
       ))}

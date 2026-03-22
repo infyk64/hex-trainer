@@ -1,11 +1,9 @@
-// client/src/pages/Trainer.tsx
-
 import { useState } from 'react';
 import { ModeSelector } from '../components/ModeSelector';
 import { AnswerOptions } from '../components/AnswerOptions';
-import { Solution }      from '../components/Solution';
+import { Solution } from '../components/Solution';
 import { fetchQuestion, buildSolution } from '../api/trainer';
-import { saveAttempt } from '../api/clinet';
+import { saveAttempt } from '../api/client';
 import type { Mode, Question, HistoryItem, SolutionStep } from '../types';
 
 const MODE_LABELS: Record<Mode, string> = {
@@ -18,54 +16,34 @@ const MODE_LABELS: Record<Mode, string> = {
   'random':         'Случайные',
 };
 
-interface Props {
-  onAttempt: (item: HistoryItem) => void;
-}
+interface Props { onAttempt: (item: HistoryItem) => void; }
 
 export function Trainer({ onAttempt }: Props) {
-  const [mode, setMode]           = useState<Mode>('hex-to-dec');
-  const [question, setQuestion]   = useState<Question | null>(null);
-  const [selected, setSelected]   = useState<number | null>(null);
-  const [checked, setChecked]     = useState(false);
-  const [solution, setSolution]   = useState<SolutionStep[]>([]);
-  const [score, setScore]         = useState({ correct: 0, wrong: 0 });
+  const [mode, setMode] = useState<Mode>('hex-to-dec');
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [solution, setSolution] = useState<SolutionStep[]>([]);
+  const [score, setScore] = useState({ correct: 0, wrong: 0 });
 
   const loadQuestion = async () => {
     const q = await fetchQuestion(mode);
-    setQuestion(q);
-    setSelected(null);
-    setChecked(false);
-    setSolution([]);
+    setQuestion(q); setSelected(null); setChecked(false); setSolution([]);
   };
 
   const handleModeChange = (m: Mode) => {
-    setMode(m);
-    setQuestion(null);
-    setSelected(null);
-    setChecked(false);
-    setSolution([]);
+    setMode(m); setQuestion(null); setSelected(null); setChecked(false); setSolution([]);
   };
 
   const checkAnswer = async () => {
     if (!question || selected === null) return;
-
     const selectedOpt = question.options.find(o => o.id === selected);
     const isCorrect = selectedOpt?.isCorrect ?? false;
 
-    const steps = buildSolution(question).map((desc, i) => ({
-      step: i + 1,
-      description: desc,
-      value: '',
-    }));
+    const steps = buildSolution(question).map((desc, i) => ({ step: i + 1, description: desc, value: '' }));
+    setSolution(steps); setChecked(true);
+    setScore(s => ({ correct: s.correct + (isCorrect ? 1 : 0), wrong: s.wrong + (isCorrect ? 0 : 1) }));
 
-    setSolution(steps);
-    setChecked(true);
-    setScore(s => ({
-      correct: s.correct + (isCorrect ? 1 : 0),
-      wrong:   s.wrong   + (isCorrect ? 0 : 1),
-    }));
-
-    // Сохраняем в БД
     try {
       await saveAttempt({
         mode: MODE_LABELS[question.mode],
@@ -74,18 +52,11 @@ export function Trainer({ onAttempt }: Props) {
         answer: selectedOpt?.label ?? '',
         isCorrect,
       });
-      console.log('✅ Попытка сохранена в БД');
-    } catch (err) {
-      console.error('❌ Ошибка сохранения:', err);
-    }
+    } catch (err) { console.error('Ошибка сохранения:', err); }
 
-    // Сохраняем в локальную историю
     onAttempt({
-      display:   question.display,
-      correct:   question.correct,
-      answer:    selectedOpt?.label ?? '',
-      isCorrect,
-      mode:      MODE_LABELS[question.mode],
+      display: question.display, correct: question.correct,
+      answer: selectedOpt?.label ?? '', isCorrect, mode: MODE_LABELS[question.mode],
     });
   };
 
@@ -102,54 +73,31 @@ export function Trainer({ onAttempt }: Props) {
       <ModeSelector mode={mode} onChange={handleModeChange} />
 
       <div className="question-card">
-        <div className="question-label">
-          {question ? MODE_LABELS[question.mode] : 'Выбери режим и начни'}
-        </div>
-        <div className="question-value">
-          {question ? question.display.split('=')[0].trim() : '—'}
-        </div>
-        <div className="question-hint">
-          {question ? question.display : 'Нажми «Новое задание»'}
-        </div>
+        <div className="question-label">{question ? MODE_LABELS[question.mode] : 'Выбери режим и начни'}</div>
+        <div className="question-value">{question ? question.display.split('=')[0].trim() : '—'}</div>
+        <div className="question-hint">{question ? question.display : 'Нажми «Новое задание»'}</div>
       </div>
 
       {question && (
-        <AnswerOptions
-          options={question.options}
-          selected={selected}
-          onChange={setSelected}
-          disabled={checked}
-        />
+        <AnswerOptions options={question.options} selected={selected} onChange={setSelected} disabled={checked} />
       )}
 
       {checked && (
-        <div className={`result-bar ${
-          question?.options.find(o => o.id === selected)?.isCorrect
-            ? 'correct' : 'wrong'
-        }`}>
+        <div className={`result-bar ${question?.options.find(o => o.id === selected)?.isCorrect ? 'correct' : 'wrong'}`}>
           {question?.options.find(o => o.id === selected)?.isCorrect
-            ? '✓ Верно!'
-            : `✗ Неверно. Правильный ответ: ${question?.correct}`
-          }
+            ? '✓ Верно!' : `✗ Неверно. Правильный ответ: ${question?.correct}`}
         </div>
       )}
 
-      {checked && solution.length > 0 && (
-        <Solution steps={solution} />
-      )}
+      {checked && solution.length > 0 && <Solution steps={solution} />}
 
       {!checked ? (
-        <button
-          className="btn-primary"
-          onClick={question ? checkAnswer : loadQuestion}
-          disabled={question !== null && selected === null}
-        >
+        <button className="btn-primary" onClick={question ? checkAnswer : loadQuestion}
+          disabled={question !== null && selected === null}>
           {question ? 'Проверить' : 'Новое задание'}
         </button>
       ) : (
-        <button className="btn-primary" onClick={loadQuestion}>
-          Следующее →
-        </button>
+        <button className="btn-primary" onClick={loadQuestion}>Следующее →</button>
       )}
     </div>
   );

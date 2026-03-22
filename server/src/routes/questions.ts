@@ -5,7 +5,6 @@ const router = Router();
 
 router.get('/generate', (req, res) => {
   const mode = (req.query.mode as string) || 'random';
-  console.log(`📥 Запрос: mode=${mode}`);
   const question = generateQuestion(mode);
   res.json(question);
 });

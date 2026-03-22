@@ -1,9 +1,6 @@
 import type { Mode } from '../types';
 
-interface Props {
-  mode: Mode;
-  onChange: (mode: Mode) => void;
-}
+interface Props { mode: Mode; onChange: (mode: Mode) => void; }
 
 const MODES: { value: Mode; label: string }[] = [
   { value: 'hex-to-dec',     label: '16 → 10'    },
@@ -19,11 +16,9 @@ export function ModeSelector({ mode, onChange }: Props) {
   return (
     <div className="mode-row" style={{ flexWrap: 'wrap' }}>
       {MODES.map(m => (
-        <button
-          key={m.value}
+        <button key={m.value}
           className={`mode-btn ${mode === m.value ? 'active' : ''}`}
-          onClick={() => onChange(m.value)}
-        >
+          onClick={() => onChange(m.value)}>
           {m.label}
         </button>
       ))}
