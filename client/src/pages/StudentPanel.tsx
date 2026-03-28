@@ -31,7 +31,7 @@ export function StudentPanel() {
 
       {tests.length === 0 ? (
         <div className="empty-state">
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📚</div>
+          <div style={{ fontSize: 32, marginBottom: 12 }}></div>
           <div>Пока нет назначенных тестов</div>
         </div>
       ) : (

@@ -5,6 +5,7 @@ export function LoginPage() {
   const { login } = useAuth();
   const [loginStr, setLoginStr] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -26,9 +27,7 @@ export function LoginPage() {
       <div className="login-card">
         <h1>ТРЕНАЖЁР 16СС</h1>
         <p className="subtitle">Шестнадцатеричная система счисления</p>
-
         {error && <div className="form-error">{error}</div>}
-
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Логин</label>
@@ -43,13 +42,36 @@ export function LoginPage() {
           </div>
           <div className="form-group">
             <label>Пароль</label>
-            <input
-              className="form-input"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Введите пароль"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                className="form-input"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Введите пароль"
+                style={{ paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text2)',
+                  fontSize: 18,
+                  lineHeight: 1,
+                  padding: 0,
+                }}
+                title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              >
+                {showPassword ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
           <button className="btn-primary" type="submit" disabled={loading || !loginStr || !password}>
             {loading ? 'Вход...' : 'Войти'}

@@ -71,9 +71,9 @@ function App() {
   if (user.role === "admin")
     navLinks.unshift({ to: "/admin", label: "⚙ Панель админа" });
   if (user.role === "teacher")
-    navLinks.unshift({ to: "/teacher", label: "📋 Панель преподавателя" });
+    navLinks.unshift({ to: "/teacher", label: " Панель преподавателя" });
   if (user.role === "student")
-    navLinks.unshift({ to: "/student", label: "📚 Мои курсы" });
+    navLinks.unshift({ to: "/student", label: " Мои курсы" });
 
   return (
     <BrowserRouter>

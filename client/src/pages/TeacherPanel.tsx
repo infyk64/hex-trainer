@@ -11,6 +11,7 @@ export function TeacherPanel() {
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [showTestForm, setShowTestForm] = useState(false);
+  const [editingTest, setEditingTest] = useState<any | null>(null); // тест для просмотра/редактирования
   const [testForm, setTestForm] = useState({ title: '', timeLimitMin: '', maxAttempts: '1' });
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [testGroupIds, setTestGroupIds] = useState<number[]>([]);
@@ -79,6 +80,29 @@ export function TeacherPanel() {
   const deleteTest = async (id: number) => {
     if (!confirm('Удалить тест?')) return;
     await api.delete(`/tests/${id}`);
+    loadTests();
+  };
+
+  // Открыть тест для просмотра/редактирования
+  const openTest = async (t: Test) => {
+    try {
+      const { data } = await api.get(`/tests/${t.id}`);
+      setEditingTest(data);
+    } catch {
+      // если нет детального эндпоинта — открываем то что есть
+      setEditingTest({ ...t, questions: [] });
+    }
+  };
+
+  const saveTest = async () => {
+    if (!editingTest) return;
+    await api.put(`/tests/${editingTest.id}`, {
+      title: editingTest.title,
+      timeLimitMin: editingTest.time_limit_min,
+      maxAttempts: editingTest.max_attempts,
+      groupIds: editingTest.group_ids || [],
+    });
+    setEditingTest(null);
     loadTests();
   };
 
@@ -156,11 +180,15 @@ export function TeacherPanel() {
                     {t.time_limit_min ? `⏱ ${t.time_limit_min} мин` : 'Без лимита'} · Попытки: {t.max_attempts}
                   </div>
                 </div>
-                <button className="btn-danger" onClick={() => deleteTest(t.id)}>Удалить</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn-small" onClick={() => openTest(t)}>Открыть</button>
+                  <button className="btn-danger" onClick={() => deleteTest(t.id)}>Удалить</button>
+                </div>
               </div>
             ))}
           </div>
 
+          {/* Модалка создания теста */}
           {showTestForm && (
             <div className="modal-overlay" onClick={() => setShowTestForm(false)}>
               <div className="modal-card" style={{ maxWidth: 600, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -214,6 +242,83 @@ export function TeacherPanel() {
                 <div className="modal-actions">
                   <button className="btn-primary" style={{ flex: 1 }} onClick={createTest}>Создать тест</button>
                   <button className="btn-secondary" onClick={() => setShowTestForm(false)}>Отмена</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Модалка просмотра/редактирования теста */}
+          {editingTest && (
+            <div className="modal-overlay" onClick={() => setEditingTest(null)}>
+              <div className="modal-card" style={{ maxWidth: 600, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+                <h2>Редактирование теста</h2>
+                <div className="form-group">
+                  <label>Название</label>
+                  <input
+                    className="form-input"
+                    value={editingTest.title}
+                    onChange={e => setEditingTest({ ...editingTest, title: e.target.value })}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Время (мин)</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      value={editingTest.time_limit_min ?? ''}
+                      onChange={e => setEditingTest({ ...editingTest, time_limit_min: e.target.value ? parseInt(e.target.value) : null })}
+                      placeholder="Без лимита"
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Попытки</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      value={editingTest.max_attempts ?? 1}
+                      onChange={e => setEditingTest({ ...editingTest, max_attempts: parseInt(e.target.value) })}
+                    />
+                  </div>
+                </div>
+
+                {/* Назначить группам */}
+                <div className="form-group">
+                  <label>Группы</label>
+                  {groups.map(g => (
+                    <label key={g.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={(editingTest.group_ids || []).includes(g.id)}
+                        onChange={e => {
+                          const ids = editingTest.group_ids || [];
+                          setEditingTest({
+                            ...editingTest,
+                            group_ids: e.target.checked ? [...ids, g.id] : ids.filter((id: number) => id !== g.id),
+                          });
+                        }}
+                      />
+                      {g.name}
+                    </label>
+                  ))}
+                </div>
+
+                {/* Список вопросов (только просмотр) */}
+                {editingTest.questions && editingTest.questions.length > 0 && (
+                  <div className="form-group">
+                    <label>Вопросы ({editingTest.questions.length})</label>
+                    {editingTest.questions.map((q: any, i: number) => (
+                      <div key={i} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span><code style={{ fontFamily: 'var(--mono)' }}>{q.display}</code></span>
+                        <span style={{ color: 'var(--text2)', fontSize: 11 }}>{q.mode}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="modal-actions">
+                  <button className="btn-primary" style={{ flex: 1 }} onClick={saveTest}>Сохранить</button>
+                  <button className="btn-secondary" onClick={() => setEditingTest(null)}>Закрыть</button>
                 </div>
               </div>
             </div>

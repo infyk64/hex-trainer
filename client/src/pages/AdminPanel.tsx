@@ -14,6 +14,7 @@ export function AdminPanel() {
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [form, setForm] = useState({
     fullName: "",
+    login: "",
     role: "student",
     studentId: "",
     newPassword: "",
@@ -34,7 +35,7 @@ export function AdminPanel() {
 
   const openCreate = () => {
     setEditUser(null);
-    setForm({ fullName: "", role: "student", studentId: "", newPassword: "" });
+    setForm({ fullName: "", login: "", role: "student", studentId: "", newPassword: "" });
     setShowForm(true);
     setLastCreated(null);
   };
@@ -43,6 +44,7 @@ export function AdminPanel() {
     setEditUser(u);
     setForm({
       fullName: u.full_name,
+      login: u.login,
       role: u.role,
       studentId: u.student_id || "",
       newPassword: "",
@@ -146,7 +148,7 @@ export function AdminPanel() {
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h2>{editUser ? "Редактирование" : "Новый пользователь"}</h2>
+            <h2>{editUser ? "Редактирование пользователя" : "Новый пользователь"}</h2>
 
             <div className="form-group">
               <label>ФИО</label>
@@ -156,6 +158,20 @@ export function AdminPanel() {
                 onChange={(e) => setForm({ ...form, fullName: e.target.value })}
               />
             </div>
+
+            {/* Поле логина — только при редактировании */}
+            {editUser && (
+              <div className="form-group">
+                <label>Логин</label>
+                <input
+                  className="form-input"
+                  value={form.login}
+                  onChange={(e) => setForm({ ...form, login: e.target.value })}
+                  placeholder="Логин пользователя"
+                />
+              </div>
+            )}
+
             <div className="form-group">
               <label>Роль</label>
               <select
@@ -170,6 +186,7 @@ export function AdminPanel() {
                 ))}
               </select>
             </div>
+
             {form.role === "student" && (
               <div className="form-group">
                 <label>Номер студенческого (= пароль)</label>
@@ -183,6 +200,7 @@ export function AdminPanel() {
                 />
               </div>
             )}
+
             {editUser && (
               <div className="form-group">
                 <label>Новый пароль (оставьте пустым, чтобы не менять)</label>
