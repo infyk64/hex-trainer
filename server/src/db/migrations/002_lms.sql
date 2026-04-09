@@ -137,3 +137,16 @@ CREATE TABLE attempts (
   is_correct  BOOLEAN NOT NULL,
   created_at  TIMESTAMP DEFAULT NOW()
 );
+
+-- ═══════════════════════════════════════
+-- БАНК ВОПРОСОВ ПРЕПОДАВАТЕЛЯ
+-- ═══════════════════════════════════════
+CREATE TABLE IF NOT EXISTS question_bank (
+  id          SERIAL PRIMARY KEY,
+  teacher_id  INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  mode        VARCHAR(30) NOT NULL DEFAULT 'open',
+  display     VARCHAR(500) NOT NULL,
+  correct     VARCHAR(200) NOT NULL,
+  options     JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMP DEFAULT NOW()
+);

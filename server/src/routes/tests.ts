@@ -102,12 +102,51 @@ router.get("/:id", authMiddleware, async (req, res) => {
       ...test.rows[0],
       questions: questions.rows,
       groups: assignments.rows,
+      group_ids: assignments.rows.map((g: { id: number }) => g.id),
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Ошибка" });
   }
 });
+
+// PUT /api/tests/:id — редактирование теста
+router.put(
+  "/:id",
+  authMiddleware,
+  requireRole("teacher", "admin"),
+  async (req, res) => {
+    try {
+      const { title, timeLimitMin, maxAttempts, groupIds } = req.body;
+      const testId = req.params.id;
+
+      const result = await pool.query(
+        `UPDATE tests SET title = $1, time_limit_min = $2, max_attempts = $3
+         WHERE id = $4 AND teacher_id = $5 RETURNING *`,
+        [title, timeLimitMin ?? null, maxAttempts ?? 1, testId, req.user!.id]
+      );
+
+      if (result.rows.length === 0)
+        return res.status(404).json({ error: "Тест не найден" });
+
+      // Обновляем назначения групп
+      await pool.query("DELETE FROM test_assignments WHERE test_id = $1", [testId]);
+      if (groupIds && groupIds.length > 0) {
+        for (const gId of groupIds) {
+          await pool.query(
+            "INSERT INTO test_assignments (test_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            [testId, gId]
+          );
+        }
+      }
+
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Ошибка обновления теста" });
+    }
+  }
+);
 
 // DELETE /api/tests/:id
 router.delete(
