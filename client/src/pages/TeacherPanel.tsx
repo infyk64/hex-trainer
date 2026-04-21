@@ -29,11 +29,83 @@ interface EditingTest extends Test {
   group_ids?: number[];
   questions?: (Question & { mode: string })[];
 }
+interface TestResultAttempt {
+  id: number;
+  student_id: number;
+  full_name: string;
+  score: number;
+  total: number;
+  started_at: string;
+  finished_at: string | null;
+}
+
+interface StudentAnalytics {
+  studentId: number;
+  fullName: string;
+  attempts: TestResultAttempt[];
+  avgPercent: number;
+  trendSlope: number;
+  trendLabel: string;
+  trendEquation: string;
+  successProbability: number;
+  riskClass: string;
+}
+
+function toPercent(score: number, total: number): number {
+  if (total <= 0) return 0;
+  return (score / total) * 100;
+}
+
+function getLinearRegression(points: number[]): { slope: number; intercept: number } {
+  if (points.length === 0) return { slope: 0, intercept: 0 };
+  if (points.length === 1) return { slope: 0, intercept: points[0] };
+
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    const x = i + 1;
+    const y = points[i];
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumXX += x * x;
+  }
+
+  const n = points.length;
+  const denominator = n * sumXX - sumX * sumX;
+  if (denominator === 0) return { slope: 0, intercept: points[0] };
+
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+
+  return { slope, intercept };
+}
+
+function getTrendLabel(slope: number): string {
+  if (slope > 2) return "Рост";
+  if (slope < -2) return "Снижение";
+  return "Стабильно";
+}
+
+function bucketByPercent(percent: number): "low" | "mid" | "high" {
+  if (percent < 50) return "low";
+  if (percent < 75) return "mid";
+  return "high";
+}
+
+function trendDirection(slope: number): "down" | "stable" | "up" {
+  if (slope > 2) return "up";
+  if (slope < -2) return "down";
+  return "stable";
+}
 
 export function TeacherPanel() {
-  const [tab, setTab] = useState<"groups" | "tests" | "questions" | "theory">(
-    "groups",
-  );
+  const [tab, setTab] = useState<
+    "groups" | "tests" | "questions" | "theory" | "analytics"
+  >("groups");
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -80,6 +152,135 @@ export function TeacherPanel() {
   });
   const [showMdInstructions, setShowMdInstructions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [analyticsTestId, setAnalyticsTestId] = useState<number | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsStudents, setAnalyticsStudents] = useState<StudentAnalytics[]>(
+    [],
+  );
+
+  const buildStudentAnalytics = (attemptsRaw: TestResultAttempt[]) => {
+    const finished = attemptsRaw.filter((a) => a.finished_at);
+    const byStudent = new Map<number, TestResultAttempt[]>();
+
+    for (const item of finished) {
+      const list = byStudent.get(item.student_id) ?? [];
+      list.push(item);
+      byStudent.set(item.student_id, list);
+    }
+
+    for (const arr of byStudent.values()) {
+      arr.sort((a, b) => +new Date(a.started_at) - +new Date(b.started_at));
+    }
+
+    const trainData: {
+      scoreBucket: "low" | "mid" | "high";
+      trend: "down" | "stable" | "up";
+      labelSuccess: boolean;
+    }[] = [];
+
+    for (const arr of byStudent.values()) {
+      for (let i = 0; i < arr.length - 1; i++) {
+        const currentPct = toPercent(arr[i].score, arr[i].total);
+        const prevPct = i > 0 ? toPercent(arr[i - 1].score, arr[i - 1].total) : currentPct;
+        const delta = currentPct - prevPct;
+        const nextPct = toPercent(arr[i + 1].score, arr[i + 1].total);
+
+        trainData.push({
+          scoreBucket: bucketByPercent(currentPct),
+          trend: delta > 2 ? "up" : delta < -2 ? "down" : "stable",
+          labelSuccess: nextPct >= 70,
+        });
+      }
+    }
+
+    const totalExamples = trainData.length;
+    const successExamples = trainData.filter((d) => d.labelSuccess).length;
+    const failExamples = totalExamples - successExamples;
+
+    const priorSuccess = (successExamples + 1) / (totalExamples + 2);
+    const priorFail = (failExamples + 1) / (totalExamples + 2);
+
+    const scoreBuckets: ("low" | "mid" | "high")[] = ["low", "mid", "high"];
+    const trendBuckets: ("down" | "stable" | "up")[] = ["down", "stable", "up"];
+
+    const condProb = {
+      scoreBucketGivenSuccess: (bucket: "low" | "mid" | "high") => {
+        const c = trainData.filter(
+          (d) => d.labelSuccess && d.scoreBucket === bucket,
+        ).length;
+        return (c + 1) / (successExamples + scoreBuckets.length);
+      },
+      scoreBucketGivenFail: (bucket: "low" | "mid" | "high") => {
+        const c = trainData.filter(
+          (d) => !d.labelSuccess && d.scoreBucket === bucket,
+        ).length;
+        return (c + 1) / (failExamples + scoreBuckets.length);
+      },
+      trendGivenSuccess: (t: "down" | "stable" | "up") => {
+        const c = trainData.filter((d) => d.labelSuccess && d.trend === t).length;
+        return (c + 1) / (successExamples + trendBuckets.length);
+      },
+      trendGivenFail: (t: "down" | "stable" | "up") => {
+        const c = trainData.filter((d) => !d.labelSuccess && d.trend === t).length;
+        return (c + 1) / (failExamples + trendBuckets.length);
+      },
+    };
+
+    const result: StudentAnalytics[] = [];
+
+    for (const [studentId, arr] of byStudent.entries()) {
+      const percents = arr.map((a) => toPercent(a.score, a.total));
+      const avgPercent =
+        percents.length > 0
+          ? percents.reduce((sum, p) => sum + p, 0) / percents.length
+          : 0;
+      const { slope, intercept } = getLinearRegression(percents);
+      const scoreBucket = bucketByPercent(percents[percents.length - 1] ?? 0);
+      const studentTrend = trendDirection(slope);
+
+      let successProbability = 0.5;
+      if (totalExamples > 0) {
+        const pSuccess =
+          priorSuccess *
+          condProb.scoreBucketGivenSuccess(scoreBucket) *
+          condProb.trendGivenSuccess(studentTrend);
+        const pFail =
+          priorFail *
+          condProb.scoreBucketGivenFail(scoreBucket) *
+          condProb.trendGivenFail(studentTrend);
+        successProbability = pSuccess / (pSuccess + pFail);
+      }
+
+      let riskClass = "Зона внимания";
+      if (successProbability >= 0.7) riskClass = "Высокая вероятность успеха";
+      else if (successProbability <= 0.4) riskClass = "Риск снижения";
+
+      result.push({
+        studentId,
+        fullName: arr[0].full_name,
+        attempts: arr,
+        avgPercent,
+        trendSlope: slope,
+        trendLabel: getTrendLabel(slope),
+        trendEquation: `y = ${slope.toFixed(2)}x + ${intercept.toFixed(2)}`,
+        successProbability,
+        riskClass,
+      });
+    }
+
+    result.sort((a, b) => b.avgPercent - a.avgPercent);
+    setAnalyticsStudents(result);
+  };
+
+  const loadAnalytics = async (testId: number) => {
+    setAnalyticsLoading(true);
+    try {
+      const { data } = await api.get(`/tests/${testId}/results`);
+      buildStudentAnalytics(data as TestResultAttempt[]);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   const loadGroups = async () => {
     const { data } = await api.get("/groups");
@@ -407,6 +608,12 @@ export function TeacherPanel() {
           onClick={() => setTab("theory")}
         >
           Теория
+        </button>
+        <button
+          className={`mode-btn ${tab === "analytics" ? "active" : ""}`}
+          onClick={() => setTab("analytics")}
+        >
+          Аналитика
         </button>
       </div>
 
@@ -1314,6 +1521,136 @@ export function TeacherPanel() {
         </div>
       )}
 
+      {/* АНАЛИТИКА */}
+      {tab === "analytics" && (
+        <div className="section-card">
+          <h2>Аналитика по тестам</h2>
+          <div style={{ color: "var(--text2)", fontSize: 13, marginBottom: 10 }}>
+            Линия тренда: линейная регрессия по процентам попыток. Классификация:
+            наивный Байес (апостериорная вероятность успеха).
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <select
+              className="form-input"
+              value={analyticsTestId ?? ""}
+              onChange={(e) => {
+                const id = Number(e.target.value);
+                if (!id) {
+                  setAnalyticsTestId(null);
+                  setAnalyticsStudents([]);
+                  return;
+                }
+                setAnalyticsTestId(id);
+                loadAnalytics(id);
+              }}
+            >
+              <option value="">Выберите тест...</option>
+              {tests.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {analyticsLoading && (
+            <div style={{ color: "var(--text2)", fontSize: 13 }}>Загрузка...</div>
+          )}
+
+          {!analyticsLoading && analyticsTestId && analyticsStudents.length === 0 && (
+            <div style={{ color: "var(--text2)", fontSize: 13 }}>
+              Нет завершенных попыток для анализа.
+            </div>
+          )}
+
+          {!analyticsLoading &&
+            analyticsStudents.map((student) => (
+              <div
+                key={student.studentId}
+                style={{
+                  borderBottom: "1px solid var(--border)",
+                  padding: "12px 0",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    marginBottom: 6,
+                  }}
+                >
+                  <strong>{student.fullName}</strong>
+                  <span
+                    style={{
+                      background:
+                        student.successProbability >= 0.7
+                          ? "rgba(16,185,129,0.1)"
+                          : student.successProbability <= 0.4
+                            ? "rgba(239,68,68,0.1)"
+                            : "rgba(245,158,11,0.12)",
+                      color:
+                        student.successProbability >= 0.7
+                          ? "var(--green)"
+                          : student.successProbability <= 0.4
+                            ? "var(--red)"
+                            : "var(--yellow)",
+                      padding: "4px 10px",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {student.riskClass}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                      Средний результат
+                    </div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>
+                      {student.avgPercent.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                      Линия тренда
+                    </div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>
+                      {student.trendLabel} ({student.trendSlope.toFixed(2)})
+                    </div>
+                  </div>
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                      P(успех | признаки)
+                    </div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>
+                      {(student.successProbability * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 6 }}>
+                  Регрессия: <code>{student.trendEquation}</code>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                  Попыток: {student.attempts.length}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
       {showAddTheory && (
         <div className="modal-overlay" onClick={() => setShowAddTheory(false)}>
           <div
