@@ -20,3 +20,13 @@ export async function saveAttempt(data: {
   const { data: result } = await api.post('/attempts', data);
   return result;
 }
+
+export async function getStats() {
+  const { data } = await api.get('/stats');
+  return data;
+}
+
+export async function getStatsByMode() {
+  const { data } = await api.get('/stats/by-mode');
+  return data;
+}

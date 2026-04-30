@@ -406,12 +406,12 @@ export function TeacherPanel() {
     const options: AnswerOpt[] =
       qForm.mode !== "open"
         ? qForm.options
-            .filter((o) => o.trim())
-            .map((o, i) => ({
-              id: i + 1,
-              label: o,
-              isCorrect: o === qForm.correct,
-            }))
+          .filter((o) => o.trim())
+          .map((o, i) => ({
+            id: i + 1,
+            label: o,
+            isCorrect: o === qForm.correct,
+          }))
         : [];
     const payload = {
       display: qForm.display,
