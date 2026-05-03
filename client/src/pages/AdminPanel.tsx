@@ -23,15 +23,34 @@ export function AdminPanel() {
     login: string;
     password: string;
   } | null>(null);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [stats, setStats] = useState<{
+    totalUsers: number;
+    totalTests: number;
+    avgSuccess: number | null;
+  }>({ totalUsers: 0, totalTests: 0, avgSuccess: null });
+  const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
 
   const loadUsers = async () => {
     const { data } = await api.get("/users");
     setUsers(data);
+    setStats((prev) => ({ ...prev, totalUsers: data.length }));
+  };
+
+  const loadStats = async () => {
+    try {
+      const { data } = await api.get("/admin/stats");
+      setStats(data);
+    } catch {
+      // fallback — просто считаем пользователей
+    }
   };
 
   useEffect(() => {
     loadUsers();
-  }, []);
+    loadStats();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreate = () => {
     setEditUser(null);
@@ -73,11 +92,26 @@ export function AdminPanel() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Удалить пользователя?")) return;
-    await api.delete(`/users/${id}`);
+  const handleDelete = async (u: UserRow) => {
+    setConfirmDelete(u);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!confirmDelete) return;
+    await api.delete(`/users/${confirmDelete.id}`);
+    setConfirmDelete(null);
     loadUsers();
   };
+
+  const filteredUsers = users.filter((u) => {
+    const matchRole = roleFilter === "all" || u.role === roleFilter;
+    const q = search.toLowerCase();
+    const matchSearch =
+      !q ||
+      u.full_name.toLowerCase().includes(q) ||
+      u.login.toLowerCase().includes(q);
+    return matchRole && matchSearch;
+  });
 
   return (
     <div className="page-container">
@@ -86,13 +120,136 @@ export function AdminPanel() {
         <p>Управление пользователями: создание, редактирование, удаление.</p>
       </div>
 
+      {/* Статистические карточки */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 12,
+          marginBottom: 20,
+        }}
+      >
+        <div
+          style={{
+            background: "var(--bg2)",
+            borderRadius: 12,
+            padding: "16px 20px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 32,
+              fontWeight: 700,
+              fontFamily: "var(--mono)",
+              color: "var(--accent)",
+            }}
+          >
+            {stats.totalUsers}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+            Всего пользователей
+          </div>
+        </div>
+        <div
+          style={{
+            background: "var(--bg2)",
+            borderRadius: 12,
+            padding: "16px 20px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 32,
+              fontWeight: 700,
+              fontFamily: "var(--mono)",
+              color: "var(--accent)",
+            }}
+          >
+            {stats.totalTests}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+            Всего тестов создано
+          </div>
+        </div>
+        <div
+          style={{
+            background: "var(--bg2)",
+            borderRadius: 12,
+            padding: "16px 20px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 32,
+              fontWeight: 700,
+              fontFamily: "var(--mono)",
+              color:
+                stats.avgSuccess === null
+                  ? "var(--text2)"
+                  : stats.avgSuccess >= 70
+                  ? "var(--green)"
+                  : stats.avgSuccess >= 40
+                  ? "var(--yellow)"
+                  : "var(--red)",
+            }}
+          >
+            {stats.avgSuccess !== null ? `${stats.avgSuccess}%` : "—"}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+            Средний % успешности
+          </div>
+        </div>
+      </div>
+
       <div className="section-card">
         <h2>Пользователи</h2>
-        <div style={{ marginBottom: 16 }}>
+
+        {/* Кнопка + поиск + фильтр */}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginBottom: 16,
+            flexWrap: "wrap",
+            alignItems: "flex-end",
+          }}
+        >
           <button className="btn-secondary" onClick={openCreate}>
             + Создать пользователя
           </button>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 160 }}>
+            <label style={{ fontSize: 11, color: "var(--text2)" }}>
+              🔍 Поиск
+            </label>
+            <input
+              className="form-input"
+              placeholder="Поиск по ФИО, логину"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "var(--text2)" }}>
+              👥 Роль
+            </label>
+            <select
+              className="form-input"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            >
+              <option value="all">Все</option>
+              <option value="admin">admin</option>
+              <option value="student">student</option>
+              <option value="teacher">teacher</option>
+            </select>
+          </div>
         </div>
+
         <table className="admin-table">
           <thead>
             <tr>
@@ -100,12 +257,11 @@ export function AdminPanel() {
               <th>Логин</th>
               <th>Роль</th>
               <th>Пароль</th>
-              <th>Ном. студ.</th>
               <th>Действия</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {filteredUsers.map((u) => (
               <tr key={u.id}>
                 <td>{u.full_name}</td>
                 <td style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
@@ -123,7 +279,6 @@ export function AdminPanel() {
                 >
                   {(u as any).plain_password || "***"}
                 </td>
-                <td>{u.student_id || "—"}</td>
                 <td>
                   <button
                     className="btn-small"
@@ -134,7 +289,7 @@ export function AdminPanel() {
                   </button>
                   <button
                     className="btn-danger"
-                    onClick={() => handleDelete(u.id)}
+                    onClick={() => handleDelete(u)}
                   >
                     Удалить
                   </button>
@@ -144,6 +299,38 @@ export function AdminPanel() {
           </tbody>
         </table>
       </div>
+
+      {/* Модальное окно подтверждения удаления */}
+      {confirmDelete && (
+        <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="modal-card" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <h2>Подтверждение удаления</h2>
+            <p style={{ marginBottom: 16, lineHeight: 1.6 }}>
+              Вы уверены, что хотите удалить{" "}
+              <strong>
+                {confirmDelete.role === "student" ? "ученика" : confirmDelete.role === "teacher" ? "преподавателя" : "администратора"}{" "}
+                {confirmDelete.full_name}
+              </strong>
+              ? Все его результаты также будут удалены.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="btn-danger"
+                style={{ flex: 1 }}
+                onClick={confirmDeleteUser}
+              >
+                Удалить
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setConfirmDelete(null)}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
@@ -159,7 +346,6 @@ export function AdminPanel() {
               />
             </div>
 
-            {/* Поле логина — только при редактировании */}
             {editUser && (
               <div className="form-group">
                 <label>Логин</label>

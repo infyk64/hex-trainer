@@ -462,15 +462,12 @@ export function TeacherPanel() {
   const saveTheory = async () => {
     if (!editingTheory) return;
     try {
-      const result = await api.put(`/theory/${editingTheory.id}`, {
+      await api.put(`/theory/${editingTheory.id}`, {
         title: editingTheory.title,
         content: editingTheory.content,
       });
-      // Обновляем список: заменяем отредактированный раздел
-      setTheorySections((prev) =>
-        prev.map((s) => (s.id === editingTheory.id ? result.data : s))
-      );
       setEditingTheory(null);
+      await loadTheory(); // перезагружаем список с сервера
     } catch (err: any) {
       alert(err.response?.data?.error || "Ошибка сохранения");
     }

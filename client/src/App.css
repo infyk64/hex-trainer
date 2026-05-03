@@ -127,7 +127,7 @@ body {
   padding: 36px; position: relative; overflow: hidden;
 }
 .theory-hero::before {
-  content: '16'; position: absolute; right: 24px; top: 50%;
+  content: ''; position: absolute; right: 24px; top: 50%;
   transform: translateY(-50%);
   font-family: var(--display); font-size: 120px; font-weight: 700;
   color: rgba(37,99,235,0.06); line-height: 1; pointer-events: none;
