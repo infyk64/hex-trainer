@@ -59,14 +59,22 @@ function App() {
     );
   if (!user) return <LoginPage />;
 
-  const navLinks = [
+  const baseLinks = [
     { to: "/theory", label: "Теория" },
     { to: "/tables", label: "Таблицы" },
     { to: "/arithmetic", label: "Арифметика" },
     { to: "/instructions", label: "Инструкция" },
-    { to: "/trainer", label: "Тренажёр" },
-    { to: "/stats", label: "Статистика" },
   ];
+
+  // Тренажёр и Статистика только для студентов
+  const navLinks =
+    user.role === "student"
+      ? [
+          ...baseLinks,
+          { to: "/trainer", label: "Тренажёр" },
+          { to: "/stats", label: "Статистика" },
+        ]
+      : [...baseLinks];
 
   if (user.role === "admin")
     navLinks.unshift({ to: "/admin", label: "⚙ Панель админа" });

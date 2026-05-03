@@ -104,7 +104,7 @@ function trendDirection(slope: number): "down" | "stable" | "up" {
 
 export function TeacherPanel() {
   const [tab, setTab] = useState<
-    "groups" | "tests" | "questions" | "theory" | "analytics"
+    "groups" | "tests" | "questions" | "theory" | "analytics" | "student-stats"
   >("groups");
 
   const [groups, setGroups] = useState<Group[]>([]);
@@ -154,9 +154,8 @@ export function TeacherPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [analyticsTestId, setAnalyticsTestId] = useState<number | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsStudents, setAnalyticsStudents] = useState<StudentAnalytics[]>(
-    [],
-  );
+  const [analyticsStudents, setAnalyticsStudents] = useState<StudentAnalytics[]>([]);
+  const [testSearch, setTestSearch] = useState("");
 
   const buildStudentAnalytics = (attemptsRaw: TestResultAttempt[]) => {
     const finished = attemptsRaw.filter((a) => a.finished_at);
@@ -406,12 +405,12 @@ export function TeacherPanel() {
     const options: AnswerOpt[] =
       qForm.mode !== "open"
         ? qForm.options
-          .filter((o) => o.trim())
-          .map((o, i) => ({
-            id: i + 1,
-            label: o,
-            isCorrect: o === qForm.correct,
-          }))
+            .filter((o) => o.trim())
+            .map((o, i) => ({
+              id: i + 1,
+              label: o,
+              isCorrect: o === qForm.correct,
+            }))
         : [];
     const payload = {
       display: qForm.display,
@@ -462,12 +461,19 @@ export function TeacherPanel() {
 
   const saveTheory = async () => {
     if (!editingTheory) return;
-    await api.put(`/theory/${editingTheory.id}`, {
-      title: editingTheory.title,
-      content: editingTheory.content,
-    });
-    setEditingTheory(null);
-    loadTheory();
+    try {
+      const result = await api.put(`/theory/${editingTheory.id}`, {
+        title: editingTheory.title,
+        content: editingTheory.content,
+      });
+      // Обновляем список: заменяем отредактированный раздел
+      setTheorySections((prev) =>
+        prev.map((s) => (s.id === editingTheory.id ? result.data : s))
+      );
+      setEditingTheory(null);
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Ошибка сохранения");
+    }
   };
 
   const deleteTheory = async (id: number) => {
@@ -615,6 +621,12 @@ export function TeacherPanel() {
         >
           Аналитика
         </button>
+        <button
+          className={`mode-btn ${tab === "student-stats" ? "active" : ""}`}
+          onClick={() => setTab("student-stats")}
+        >
+          Статистика по ученику
+        </button>
       </div>
 
       {/* ГРУППЫ */}
@@ -725,14 +737,27 @@ export function TeacherPanel() {
         <>
           <div className="section-card">
             <h2>Мои тесты</h2>
-            <button
-              className="btn-secondary"
-              onClick={() => setShowTestForm(true)}
-              style={{ marginBottom: 16 }}
-            >
-              + Создать тест
-            </button>
-            {tests.map((t) => (
+            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowTestForm(true)}
+              >
+                + Создать тест
+              </button>
+              <input
+                className="form-input"
+                style={{ flex: 1, minWidth: 180 }}
+                placeholder="🔍 Поиск по тестам..."
+                value={testSearch}
+                onChange={(e) => setTestSearch(e.target.value)}
+              />
+            </div>
+            {tests
+              .filter((t) =>
+                !testSearch ||
+                t.title.toLowerCase().includes(testSearch.toLowerCase())
+              )
+              .map((t) => (
               <div
                 key={t.id}
                 style={{
@@ -1526,8 +1551,7 @@ export function TeacherPanel() {
         <div className="section-card">
           <h2>Аналитика по тестам</h2>
           <div style={{ color: "var(--text2)", fontSize: 13, marginBottom: 10 }}>
-            Линия тренда: линейная регрессия по процентам попыток. Классификация:
-            наивный Байес (апостериорная вероятность успеха).
+            Линия тренда: линейная регрессия. Классификация: наивный Байес.
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             <select
@@ -1535,120 +1559,246 @@ export function TeacherPanel() {
               value={analyticsTestId ?? ""}
               onChange={(e) => {
                 const id = Number(e.target.value);
-                if (!id) {
-                  setAnalyticsTestId(null);
-                  setAnalyticsStudents([]);
-                  return;
-                }
+                if (!id) { setAnalyticsTestId(null); setAnalyticsStudents([]); return; }
                 setAnalyticsTestId(id);
                 loadAnalytics(id);
               }}
             >
               <option value="">Выберите тест...</option>
               {tests.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
+                <option key={t.id} value={t.id}>{t.title}</option>
               ))}
             </select>
           </div>
 
-          {analyticsLoading && (
-            <div style={{ color: "var(--text2)", fontSize: 13 }}>Загрузка...</div>
-          )}
-
+          {analyticsLoading && <div style={{ color: "var(--text2)", fontSize: 13 }}>Загрузка...</div>}
           {!analyticsLoading && analyticsTestId && analyticsStudents.length === 0 && (
-            <div style={{ color: "var(--text2)", fontSize: 13 }}>
-              Нет завершенных попыток для анализа.
-            </div>
+            <div style={{ color: "var(--text2)", fontSize: 13 }}>Нет завершенных попыток для анализа.</div>
           )}
 
-          {!analyticsLoading &&
-            analyticsStudents.map((student) => (
-              <div
-                key={student.studentId}
-                style={{
-                  borderBottom: "1px solid var(--border)",
-                  padding: "12px 0",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 8,
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    marginBottom: 6,
-                  }}
-                >
-                  <strong>{student.fullName}</strong>
-                  <span
-                    style={{
-                      background:
-                        student.successProbability >= 0.7
-                          ? "rgba(16,185,129,0.1)"
-                          : student.successProbability <= 0.4
-                            ? "rgba(239,68,68,0.1)"
-                            : "rgba(245,158,11,0.12)",
-                      color:
-                        student.successProbability >= 0.7
-                          ? "var(--green)"
-                          : student.successProbability <= 0.4
-                            ? "var(--red)"
-                            : "var(--yellow)",
-                      padding: "4px 10px",
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {student.riskClass}
-                  </span>
+          {!analyticsLoading && analyticsStudents.map((student) => {
+            const percents = student.attempts.map((a) => toPercent(a.score, a.total));
+            const { slope, intercept } = getLinearRegression(percents);
+            const W = 480; const H = 200; const PAD = 40;
+            const chartW = W - PAD - 20; const chartH = H - PAD - 20;
+            const n = percents.length;
+            const pct = (student.successProbability * 100);
+            const avgPct = student.avgPercent;
+
+            // SVG точки
+            const pts = percents.map((p, i) => ({
+              x: PAD + (n > 1 ? (i / (n - 1)) * chartW : chartW / 2),
+              y: (H - 20) - (p / 100) * chartH,
+            }));
+            // Линия тренда
+            const trendX1 = PAD;
+            const trendY1 = (H - 20) - ((slope * 1 + intercept) / 100) * chartH;
+            const trendX2 = PAD + chartW;
+            const trendY2 = (H - 20) - ((slope * n + intercept) / 100) * chartH;
+
+            const trendColor = slope > 2 ? "#10b981" : slope < -2 ? "#ef4444" : "#6366f1";
+            const riskColor = pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444";
+            const avgColor = avgPct >= 70 ? "#10b981" : avgPct >= 40 ? "#f59e0b" : "#ef4444";
+
+            return (
+              <div key={student.studentId} style={{ borderBottom: "1px solid var(--border)", padding: "20px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                  <strong style={{ fontSize: 16 }}>{student.fullName}</strong>
+                  <span style={{ fontSize: 12, color: "var(--text2)" }}>Попыток: {n}</span>
                 </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: 8 }}>
-                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                      Средний результат
+                {/* 4 плашки линии тренда */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 16 }}>
+                  {/* Плашка 1 — статус тренда */}
+                  <div style={{ borderRadius: 10, padding: "12px 14px", background: slope > 2 ? "rgba(16,185,129,0.1)" : slope < -2 ? "rgba(239,68,68,0.1)" : "rgba(100,100,120,0.1)" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>↗ Тренд</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: trendColor, margin: "4px 0" }}>
+                      {n < 2 ? "Нет данных" : slope > 2 ? "Рост" : slope < -2 ? "Спад" : "Стабильно"}
                     </div>
-                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>
-                      {student.avgPercent.toFixed(1)}%
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>
+                      {n < 2 ? "Требуется ≥2 попытки" : `${slope > 0 ? "+" : ""}${slope.toFixed(1)}% за попытку`}
                     </div>
                   </div>
-                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: 8 }}>
-                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                      Линия тренда
+                  {/* Плашка 2 — уравнение */}
+                  <div style={{ borderRadius: 10, padding: "12px 14px", background: "rgba(99,102,241,0.08)" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>📐 Уравнение тренда</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--mono)", margin: "4px 0", color: "var(--accent)" }}>
+                      {n < 2 ? "Недостаточно данных" : student.trendEquation}
                     </div>
-                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>
-                      {student.trendLabel} ({student.trendSlope.toFixed(2)})
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>{n < 2 ? "Требуется 2 попытки" : "y — %, x — попытка"}</div>
+                  </div>
+                  {/* Плашка 3 — средний результат */}
+                  <div style={{ borderRadius: 10, padding: "12px 14px", background: avgPct >= 70 ? "rgba(16,185,129,0.1)" : avgPct >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>📊 Средний результат</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: avgColor, margin: "4px 0" }}>
+                      {avgPct.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>
+                      {avgPct >= 70 ? "Хорошо" : avgPct >= 40 ? "Средне" : "Низкий"}
                     </div>
                   </div>
-                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: 8 }}>
-                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                      P(успех | признаки)
+                  {/* Плашка 4 — прогноз */}
+                  <div style={{ borderRadius: 10, padding: "12px 14px", background: pct >= 70 ? "rgba(16,185,129,0.1)" : pct >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>🎯 Прогноз{n === 1 ? " *" : ""}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: riskColor, margin: "4px 0" }}>
+                      {Math.round(pct)}%
                     </div>
-                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>
-                      {(student.successProbability * 100).toFixed(1)}%
+                    <div style={{ fontSize: 11, color: riskColor, fontWeight: 600 }}>
+                      {pct >= 70 ? "Низкий риск" : pct >= 40 ? "Средний риск" : "Высокий риск"}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 6 }}>
-                  Регрессия: <code>{student.trendEquation}</code>
+                {/* График */}
+                <div style={{ overflowX: "auto" }}>
+                  <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, display: "block" }}>
+                    {/* Сетка */}
+                    {[0, 25, 50, 75, 100].map((p) => {
+                      const y = (H - 20) - (p / 100) * chartH;
+                      return (
+                        <g key={p}>
+                          <line x1={PAD} y1={y} x2={PAD + chartW} y2={y} stroke="var(--border)" strokeWidth={0.5} />
+                          <text x={PAD - 6} y={y + 4} fontSize={9} fill="var(--text2)" textAnchor="end">{p}%</text>
+                        </g>
+                      );
+                    })}
+                    {/* Оси */}
+                    <line x1={PAD} y1={H - 20} x2={PAD + chartW} y2={H - 20} stroke="var(--border)" strokeWidth={1} />
+                    <line x1={PAD} y1={10} x2={PAD} y2={H - 20} stroke="var(--border)" strokeWidth={1} />
+                    {/* Подписи по X */}
+                    {percents.map((_, i) => {
+                      const x = PAD + (n > 1 ? (i / (n - 1)) * chartW : chartW / 2);
+                      return <text key={i} x={x} y={H - 6} fontSize={9} fill="var(--text2)" textAnchor="middle">{i + 1}</text>;
+                    })}
+                    <text x={PAD + chartW / 2} y={H} fontSize={9} fill="var(--text2)" textAnchor="middle">Попытка №</text>
+                    {/* Линия тренда (только при n >= 2) */}
+                    {n >= 2 && (
+                      <line x1={trendX1} y1={Math.max(10, Math.min(H - 20, trendY1))} x2={trendX2} y2={Math.max(10, Math.min(H - 20, trendY2))} stroke={trendColor} strokeWidth={2} strokeDasharray="5,3" opacity={0.7} />
+                    )}
+                    {/* Точки */}
+                    {pts.map((pt, i) => (
+                      <g key={i}>
+                        <circle cx={pt.x} cy={pt.y} r={5} fill={trendColor} opacity={0.85} />
+                        <text x={pt.x} y={pt.y - 8} fontSize={9} fill="var(--text2)" textAnchor="middle">{percents[i].toFixed(0)}%</text>
+                      </g>
+                    ))}
+                    {n < 2 && (
+                      <text x={PAD + chartW / 2} y={H / 2} fontSize={11} fill="var(--text2)" textAnchor="middle">Недостаточно данных (1 попытка)</text>
+                    )}
+                  </svg>
                 </div>
-                <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                  Попыток: {student.attempts.length}
+
+                {/* Классификация Байеса */}
+                <div style={{ background: "var(--bg2)", borderRadius: 12, padding: 16, marginTop: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
+                  <div style={{ textAlign: "center", marginBottom: 12 }}>
+                    <div style={{ fontSize: 40, fontWeight: 800, color: riskColor, lineHeight: 1 }}>
+                      {Math.round(pct)}%
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>Вероятность успеха</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: riskColor, marginTop: 4 }}>
+                      {pct >= 70 ? "Низкий риск" : pct >= 40 ? "Средний риск" : "Высокий риск"}
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--text2)" }}>Средний балл</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: avgColor }}>{avgPct.toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--text2)" }}>Ошибки</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: avgPct >= 70 ? "var(--green)" : "var(--red)" }}>{(100 - avgPct).toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--text2)" }}>Темп (наклон)</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: slope >= 0 ? "var(--green)" : "var(--red)" }}>
+                        {slope >= 0 ? "+" : ""}{slope.toFixed(2)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--text2)" }}>Глубина риска</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: riskColor }}>{(100 - pct).toFixed(1)}%</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
+        </div>
+      )}
+
+      {/* СТАТИСТИКА ПО УЧЕНИКУ */}
+      {tab === "student-stats" && (
+        <div className="section-card">
+          <h2>Статистика по ученику</h2>
+          <div style={{ color: "var(--text2)", fontSize: 13, marginBottom: 16 }}>
+            Выберите тест и посмотрите детальные результаты каждого студента.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <select
+              className="form-input"
+              value={analyticsTestId ?? ""}
+              onChange={(e) => {
+                const id = Number(e.target.value);
+                if (!id) { setAnalyticsTestId(null); setAnalyticsStudents([]); return; }
+                setAnalyticsTestId(id);
+                loadAnalytics(id);
+              }}
+            >
+              <option value="">Выберите тест...</option>
+              {tests.map((t) => (
+                <option key={t.id} value={t.id}>{t.title}</option>
+              ))}
+            </select>
+          </div>
+          {analyticsLoading && <div style={{ color: "var(--text2)", fontSize: 13 }}>Загрузка...</div>}
+          {!analyticsLoading && analyticsTestId && analyticsStudents.length === 0 && (
+            <div style={{ color: "var(--text2)", fontSize: 13 }}>Нет данных.</div>
+          )}
+          {!analyticsLoading && analyticsStudents.map((student) => {
+            const pct = (student.successProbability * 100);
+            const riskColor = pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444";
+            return (
+              <div key={student.studentId} style={{ borderBottom: "1px solid var(--border)", padding: "14px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                  <strong>{student.fullName}</strong>
+                  <span style={{ fontSize: 12, color: riskColor, fontWeight: 700 }}>
+                    {pct >= 70 ? "Низкий риск" : pct >= 40 ? "Средний риск" : "Высокий риск"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: "8px 14px" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>Попыток</div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>{student.attempts.length}</div>
+                  </div>
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: "8px 14px" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>Средний %</div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>{student.avgPercent.toFixed(1)}%</div>
+                  </div>
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: "8px 14px" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>Тренд</div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>{student.trendLabel}</div>
+                  </div>
+                  <div style={{ background: "var(--bg2)", borderRadius: 8, padding: "8px 14px" }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)" }}>Прогноз успеха</div>
+                    <div style={{ fontWeight: 700, fontFamily: "var(--mono)", color: riskColor }}>{Math.round(pct)}%</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  {student.attempts.map((a, i) => {
+                    const p = toPercent(a.score, a.total);
+                    return (
+                      <div key={a.id} style={{ fontSize: 12, padding: "4px 8px", background: "var(--bg2)", borderRadius: 6, marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "var(--text2)" }}>Попытка {i + 1} · {a.finished_at ? new Date(a.finished_at).toLocaleDateString("ru-RU") : "в процессе"}</span>
+                        <span style={{ fontWeight: 600, color: p >= 70 ? "var(--green)" : "var(--red)", fontFamily: "var(--mono)" }}>
+                          {a.score}/{a.total} ({p.toFixed(0)}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       {showAddTheory && (

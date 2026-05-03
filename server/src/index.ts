@@ -9,6 +9,7 @@ import groupsRouter from './routes/groups';
 import testsRouter from './routes/tests';
 import theoryRouter from './routes/theory';
 import statsRouter from './routes/stats';
+import adminStatsRouter from './routes/adminStats';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -29,6 +30,7 @@ app.use('/api/groups', groupsRouter);
 app.use('/api/tests', testsRouter);
 app.use('/api/theory', theoryRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/admin', adminStatsRouter);
 app.use('/api/questions', questionsRouter);
 app.use('/api/attempts', attemptsRouter);
 

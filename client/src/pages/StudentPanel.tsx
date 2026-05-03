@@ -54,7 +54,7 @@ export function StudentPanel() {
 
       {showStats && (
         <div className="section-card" style={{ marginBottom: 20 }}>
-          <h2>Статистика по всем тестам</h2>
+          <h2>Статистика тренажёра</h2>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
             {(
